@@ -37,6 +37,7 @@ axera_example(axcl_yolo11 ax_yolo11_steps.cc)
 axera_example(axcl_yolo11_seg ax_yolo11_seg_steps.cc)
 axera_example(axcl_yolo11_pose ax_yolo11_pose_steps.cc)
 axera_example(axcl_yolo_world_open_vocabulary ax_yolo_world_open_vocabulary_steps.cc)
+axera_example(axcl_yolo11_video ax_yolo11_steps_video.cc)
 
 axera_example(axcl_depth_anything ax_depth_anything_steps.cc)
 

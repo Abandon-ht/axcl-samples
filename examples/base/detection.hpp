@@ -1839,7 +1839,8 @@ namespace detection
                         cv::Scalar(255, 255, 255), thickness);
         }
 
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
+        cv::imshow(output_name, image);
     }
 
     static void draw_keypoints(const cv::Mat& bgr, const std::vector<Object>& objects,
