@@ -1,7 +1,7 @@
 /*
  * AXERA is pleased to support the open source community by making ax-samples available.
  *
- * Copyright (c) 2024, AXERA Semiconductor Co., Ltd. All rights reserved.
+ * Copyright (c) 2022, AXERA Semiconductor (Shanghai) Co., Ltd. All rights reserved.
  *
  * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -16,8 +16,8 @@
 
 /*
  * Note: For the YOLO11 series exported by the ultralytics project.
+ * Author: ZHEQIUSHUI
  * Author: QQC
- * Modified to process video input.
  */
 
 #include <cstdio>
@@ -49,29 +49,40 @@ const char *CLASS_NAMES[] = {
     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
     "hair drier", "toothbrush"};
-
+static const std::vector<std::vector<uint8_t>> COCO_COLORS = {
+    {56, 0, 255}, {226, 255, 0}, {0, 94, 255}, {0, 37, 255}, {0, 255, 94}, {255, 226, 0}, {0, 18, 255}, {255, 151, 0}, {170, 0, 255}, {0, 255, 56}, {255, 0, 75}, {0, 75, 255}, {0, 255, 169}, {255, 0, 207}, {75, 255, 0}, {207, 0, 255}, {37, 0, 255}, {0, 207, 255}, {94, 0, 255}, {0, 255, 113}, {255, 18, 0}, {255, 0, 56}, {18, 0, 255}, {0, 255, 226}, {170, 255, 0}, {255, 0, 245}, {151, 255, 0}, {132, 255, 0}, {75, 0, 255}, {151, 0, 255}, {0, 151, 255}, {132, 0, 255}, {0, 255, 245}, {255, 132, 0}, {226, 0, 255}, {255, 37, 0}, {207, 255, 0}, {0, 255, 207}, {94, 255, 0}, {0, 226, 255}, {56, 255, 0}, {255, 94, 0}, {255, 113, 0}, {0, 132, 255}, {255, 0, 132}, {255, 170, 0}, {255, 0, 188}, {113, 255, 0}, {245, 0, 255}, {113, 0, 255}, {255, 188, 0}, {0, 113, 255}, {255, 0, 0}, {0, 56, 255}, {255, 0, 113}, {0, 255, 188}, {255, 0, 94}, {255, 0, 18}, {18, 255, 0}, {0, 255, 132}, {0, 188, 255}, {0, 245, 255}, {0, 169, 255}, {37, 255, 0}, {255, 0, 151}, {188, 0, 255}, {0, 255, 37}, {0, 255, 0}, {255, 0, 170}, {255, 0, 37}, {255, 75, 0}, {0, 0, 255}, {255, 207, 0}, {255, 0, 226}, {255, 245, 0}, {188, 255, 0}, {0, 255, 18}, {0, 255, 75}, {0, 255, 151}, {255, 56, 0}, {245, 255, 0}};
 int NUM_CLASS = 80;
 
 const int DEFAULT_LOOP_COUNT = 1;
-
+const int DEFAULT_MASK_PROTO_DIM = 32;
+const int DEFAULT_MASK_SAMPLE_STRIDE = 4;
 const float PROB_THRESHOLD = 0.45f;
 const float NMS_THRESHOLD = 0.45f;
 namespace ax
 {
-    void post_process(const ax_runner_tensor_t *output, const int nOutputSize, cv::Mat &mat, int input_w, int input_h, const std::vector<float> &time_costs)
+    void post_process(const ax_runner_tensor_t *output, const int nOutputSize, const cv::Mat &mat, int input_w, int input_h, const std::vector<float> &time_costs)
     {
         std::vector<detection::Object> proposals;
         std::vector<detection::Object> objects;
-
+        timer timer_postprocess;
+        float *output_ptr[3] = {(float *)output[0].pVirAddr,      // 1*80*80*144
+                                (float *)output[1].pVirAddr,      // 1*40*40*144
+                                (float *)output[2].pVirAddr};     // 1*20*20*144
+        float *output_seg_ptr[3] = {(float *)output[3].pVirAddr,  // 1*80*80*32
+                                    (float *)output[4].pVirAddr,  // 1*40*40*32
+                                    (float *)output[5].pVirAddr}; // 1*20*20*32
         for (int i = 0; i < 3; ++i)
         {
-            auto feat_ptr = (float *)output[i].pVirAddr;
+            auto feat_ptr = output_ptr[i];
+            auto feat_seg_ptr = output_seg_ptr[i];
             int32_t stride = (1 << i) * 8;
-            detection::generate_proposals_yolov8_native(stride, feat_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_CLASS);
+            detection::generate_proposals_yolov8_seg_native(stride, feat_ptr, feat_seg_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_CLASS);
         }
+        // 1*32*160*160
+        auto mask_proto_ptr = (float *)output[6].pVirAddr;
 
-        detection::get_out_bbox(proposals, objects, NMS_THRESHOLD, input_h, input_w, mat.rows, mat.cols);
-        detection::draw_objects(mat, objects, CLASS_NAMES, "LLM8850 Demo");
+        detection::get_out_bbox_mask(proposals, objects, mask_proto_ptr, DEFAULT_MASK_PROTO_DIM, DEFAULT_MASK_SAMPLE_STRIDE, NMS_THRESHOLD, input_h, input_w, mat.rows, mat.cols);
+        detection::draw_objects_mask(mat, objects, CLASS_NAMES, COCO_COLORS, "yolo11_seg_out");
     }
 
     bool run_model(const std::string &model, const std::vector<uint8_t> &data, cv::Mat &mat, int input_h, int input_w)
@@ -91,17 +102,27 @@ namespace ax
         }
         // 2. insert input
         memcpy(runner.get_input(0).pVirAddr, data.data(), data.size());
+        // fprintf(stdout, "Engine push input is done. \n");
+        // fprintf(stdout, "--------------------------------------\n");
 
+        // 8. warn up
+        // for (int i = 0; i < 5; ++i)
+        // {
+        //     runner.inference();
+        // }
+
+        // 9. run model
         std::vector<float> time_costs = {0};
+        // std::vector<float> time_costs(repeat, 0);
+        // for (int i = 0; i < repeat; ++i)
+        // {
         int ret = runner.inference();
-        if (ret != 0)
-        {
-            fprintf(stderr, "Model inference failed.\n");
-            return false;
-        }
+        //     time_costs[i] = runner.get_inference_time();
+        // }
 
         // 10. get result
         post_process(runner.get_outputs_ptr(0), runner.get_num_outputs(), mat, input_w, input_h, time_costs);
+        // fprintf(stdout, "--------------------------------------\n");
 
         return true;
     }
@@ -111,21 +132,21 @@ int main(int argc, char *argv[])
 {
     cmdline::parser cmd;
     cmd.add<std::string>("model", 'm', "joint file(a.k.a. joint model)", true, "");
-    // cmd.add<std::string>("image", 'i', "image file", true, ""); // Removed image arg
+    // cmd.add<std::string>("image", 'i', "image file", true, "");
     cmd.add<std::string>("video", 'v', "video file or camera index (e.g., 0)", true, ""); // Added video arg
     cmd.add<std::string>("size", 'g', "input_h, input_w", false, std::to_string(DEFAULT_IMG_H) + "," + std::to_string(DEFAULT_IMG_W));
 
-    // cmd.add<int>("repeat", 'r', "repeat count", false, DEFAULT_LOOP_COUNT); // Removed repeat for video
+    // cmd.add<int>("repeat", 'r', "repeat count", false, DEFAULT_LOOP_COUNT);
     cmd.parse_check(argc, argv);
 
-    // 0. get app args
+    // 0. get app args, can be removed from user's app
     auto model_file = cmd.get<std::string>("model");
     auto video_source = cmd.get<std::string>("video");
 
     auto model_file_flag = utilities::file_exist(model_file);
-    // auto image_file_flag = utilities::file_exist(image_file); // Removed image check
+    // auto image_file_flag = utilities::file_exist(image_file);
 
-    if (!model_file_flag) // Removed image file check
+    if (!model_file_flag)
     {
         auto show_error = [](const std::string &kind, const std::string &value)
         {
@@ -136,6 +157,10 @@ int main(int argc, char *argv[])
         {
             show_error("model", model_file);
         }
+        // if (!image_file_flag)
+        // {
+        //     show_error("image", image_file);
+        // }
 
         return -1;
     }
@@ -163,17 +188,26 @@ int main(int argc, char *argv[])
     // 1. print args
     fprintf(stdout, "--------------------------------------\n");
     fprintf(stdout, "model file : %s\n", model_file.c_str());
-    fprintf(stdout, "video source : %s\n", video_source.c_str());
+    fprintf(stdout, "video file : %s\n", video_source.c_str());
     fprintf(stdout, "img_h, img_w : %d %d\n", input_size[0], input_size[1]);
     fprintf(stdout, "--------------------------------------\n");
 
+    // 2. read image & resize & transpose
+    // std::vector<uint8_t> image(input_size[0] * input_size[1] * 3, 0);
+    // cv::Mat mat = cv::imread(image_file);
+    // if (mat.empty())
+    // {
+    //     fprintf(stderr, "Read image failed.\n");
+    //     return -1;
+    // }
+    // common::get_input_data_letterbox(mat, image, input_size[0], input_size[1]);
     // 2. Open video capture
     cv::VideoCapture cap;
     try
     {
         // Try to interpret video_source as an integer (camera index)
         int camera_index = std::stoi(video_source);
-        cap.open(camera_index, cv::CAP_V4L2);
+        cap.open(camera_index);
     }
     catch (const std::invalid_argument &e)
     {
@@ -187,29 +221,22 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // Optional: Set capture properties if needed
-    // cap.open(0, cv::CAP_V4L2);
-    cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
-    cap.set(cv::CAP_PROP_FPS, 30);
-
     // 3. init axcl
     {
         if (auto ret = axclInit(0); 0 != ret)
         {
-            fprintf(stderr, "Init AXCL failed{0x%08x}.\n", ret);
+            fprintf(stderr, "Init AXCL failed{0x%8x}.\n", ret);
             return -1;
         }
         axclrtDeviceList lst;
         if (const auto ret = axclrtGetDeviceList(&lst); 0 != ret || 0 == lst.num)
         {
-            fprintf(stderr, "Get AXCL device failed{0x%08x}, find total %d device.\n", ret, lst.num);
+            fprintf(stderr, "Get AXCL device failed{0x%8x}, find total %d device.\n", ret, lst.num);
             return -1;
         }
         if (const auto ret = axclrtSetDevice(lst.devices[0]); 0 != ret)
         {
-            fprintf(stderr, "Set AXCL device failed{0x%08x}.\n", ret);
+            fprintf(stderr, "Set AXCL device failed{0x%8x}.\n", ret);
             return -1;
         }
         int ret = axclrtEngineInit(AXCL_VNPU_DISABLE);
@@ -220,54 +247,36 @@ int main(int argc, char *argv[])
         }
     }
 
+    // // 4. -  engine model
+    // {
+    //     ax::run_model(model_file, image, repeat, mat, input_size[0], input_size[1]);
+    // }
+
+    // // 5. finalize
+    // axclFinalize();
+    // return 0;
     // 4. Process video frames
     cv::Mat frame;
 
     std::vector<uint8_t> resized_image;
     resized_image.resize(input_size[0] * input_size[1] * 3);
 
-    fprintf(stdout, "Starting video processing. Press 'q' or 'ESC' to quit.\n");
-
     while (true)
     {
-        timer t_total;
-        timer t_read;
         cap >> frame;
         if (frame.empty())
         {
             fprintf(stdout, "End of video stream or error reading frame.\n");
             break;
         }
-        float read_time = t_read.cost();
-        // double fps = cap.get(cv::CAP_PROP_FPS);
-        // std::cout << "FPS: " << cap.get(cv::CAP_PROP_FPS) << std::endl;
-        // std::cout << "Width: " << cap.get(cv::CAP_PROP_FRAME_WIDTH) << std::endl;
-        // std::cout << "Height: " << cap.get(cv::CAP_PROP_FRAME_HEIGHT) << std::endl;
-        // float total_time = t_total.cost();
-        // fprintf(stdout, "Video read time: %.2f ms\n", total_time);
-
-        timer t_letterbox;
 
         common::get_input_data_letterbox(frame, resized_image, input_size[0], input_size[1]);
-
-        float letterbox_time = t_letterbox.cost();
-
-        timer t_runmodel;
-
         bool ok = ax::run_model(model_file, resized_image, frame, input_size[0], input_size[1]);
-
-        float runmodel_time = t_runmodel.cost();
 
         if (!ok)
         {
             break;
         }
-
-        float total_time = t_total.cost();
-
-        fprintf(stdout,
-                "read_time: %.2f ms | Letterbox: %.2f ms | RunModel: %.2f ms | Total: %.2f ms\n",
-                read_time, letterbox_time, runmodel_time, total_time);
 
         char key = (char)cv::waitKey(1);
         if (key == 27 || key == 'q' || key == 'Q')
@@ -275,12 +284,8 @@ int main(int argc, char *argv[])
             break;
         }
     }
-
-    // Release resources
     cap.release();
-    cv::destroyAllWindows(); // Close all OpenCV windows
-
-    // 5. finalize axcl
+    cv::destroyAllWindows();
     axclFinalize();
     return 0;
 }

@@ -52,8 +52,8 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/check.cmake")
 # one should have a name finally
 project(AXERA-Samples)
 
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -std=c++17 -O1 -Wall -s -fPIC -Wunused-function")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++17 -O1 -Wall -s -fPIC -Wunused-function")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -std=c++17 -O2 -Wall -s -fPIC -Wunused-function")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++17 -O2 -Wall -s -fPIC -Wunused-function")
 
 # src files
 add_subdirectory(examples)
