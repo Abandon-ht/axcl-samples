@@ -1808,15 +1808,27 @@ namespace detection
     {
         static const std::vector<cv::Scalar> COCO_COLORS = {
             {128, 56, 0, 255}, {128, 226, 255, 0}, {128, 0, 94, 255}, {128, 0, 37, 255}, {128, 0, 255, 94}, {128, 255, 226, 0}, {128, 0, 18, 255}, {128, 255, 151, 0}, {128, 170, 0, 255}, {128, 0, 255, 56}, {128, 255, 0, 75}, {128, 0, 75, 255}, {128, 0, 255, 169}, {128, 255, 0, 207}, {128, 75, 255, 0}, {128, 207, 0, 255}, {128, 37, 0, 255}, {128, 0, 207, 255}, {128, 94, 0, 255}, {128, 0, 255, 113}, {128, 255, 18, 0}, {128, 255, 0, 56}, {128, 18, 0, 255}, {128, 0, 255, 226}, {128, 170, 255, 0}, {128, 255, 0, 245}, {128, 151, 255, 0}, {128, 132, 255, 0}, {128, 75, 0, 255}, {128, 151, 0, 255}, {128, 0, 151, 255}, {128, 132, 0, 255}, {128, 0, 255, 245}, {128, 255, 132, 0}, {128, 226, 0, 255}, {128, 255, 37, 0}, {128, 207, 255, 0}, {128, 0, 255, 207}, {128, 94, 255, 0}, {128, 0, 226, 255}, {128, 56, 255, 0}, {128, 255, 94, 0}, {128, 255, 113, 0}, {128, 0, 132, 255}, {128, 255, 0, 132}, {128, 255, 170, 0}, {128, 255, 0, 188}, {128, 113, 255, 0}, {128, 245, 0, 255}, {128, 113, 0, 255}, {128, 255, 188, 0}, {128, 0, 113, 255}, {128, 255, 0, 0}, {128, 0, 56, 255}, {128, 255, 0, 113}, {128, 0, 255, 188}, {128, 255, 0, 94}, {128, 255, 0, 18}, {128, 18, 255, 0}, {128, 0, 255, 132}, {128, 0, 188, 255}, {128, 0, 245, 255}, {128, 0, 169, 255}, {128, 37, 255, 0}, {128, 255, 0, 151}, {128, 188, 0, 255}, {128, 0, 255, 37}, {128, 0, 255, 0}, {128, 255, 0, 170}, {128, 255, 0, 37}, {128, 255, 75, 0}, {128, 0, 0, 255}, {128, 255, 207, 0}, {128, 255, 0, 226}, {128, 255, 245, 0}, {128, 188, 255, 0}, {128, 0, 255, 18}, {128, 0, 255, 75}, {128, 0, 255, 151}, {128, 255, 56, 0}, {128, 245, 255, 0}};
+
+        static int frame_count = 0;
+        static double last_time = (double)cv::getTickCount();
+        static double fps = 0.0;
+
+        frame_count++;
+        double current_time = (double)cv::getTickCount();
+        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
+
+        if (elapsed >= 1.0)
+        {
+            fps = frame_count / elapsed;
+            frame_count = 0;
+            last_time = current_time;
+        }
+
         cv::Mat image = bgr.clone();
 
         for (size_t i = 0; i < objects.size(); i++)
         {
             const Object& obj = objects[i];
-
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
-
             cv::rectangle(image, obj.rect, COCO_COLORS[obj.label], thickness);
 
             char text[256];
@@ -1839,7 +1851,14 @@ namespace detection
                         cv::Scalar(255, 255, 255), thickness);
         }
 
-        // cv::imwrite(std::string(output_name) + ".jpg", image);
+        char fps_text[64];
+        sprintf(fps_text, "FPS: %.2f", fps);
+        int baseLine = 0;
+        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, thickness, &baseLine);
+        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
+        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(0, 255, 0), thickness);
+
         cv::imshow(output_name, image);
     }
 
@@ -1849,14 +1868,29 @@ namespace detection
                                const std::vector<std::vector<uint8_t> >& skeleton,
                                const char* output_name)
     {
+        static int frame_count = 0;
+        static double last_time = (double)cv::getTickCount();
+        static double fps = 0.0;
+
+        frame_count++;
+        double current_time = (double)cv::getTickCount();
+        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
+
+        if (elapsed >= 1.0)
+        {
+            fps = frame_count / elapsed;
+            frame_count = 0;
+            last_time = current_time;
+        }
+
         cv::Mat image = bgr.clone();
 
         for (size_t i = 0; i < objects.size(); i++)
         {
             const Object& obj = objects[i];
 
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], person\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height);
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], person\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height);
 
             cv::rectangle(image, obj.rect, cv::Scalar(255, 0, 0));
 
@@ -1912,11 +1946,36 @@ namespace detection
                 }
             }
         }
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+
+        char fps_text[64];
+        sprintf(fps_text, "FPS: %.2f", fps);
+        int baseLine = 0;
+        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
+        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(0, 255, 0), 1);
+
+        cv::imshow(output_name, image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
     }
 
     static void draw_objects_mask(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const std::vector<std::vector<uint8_t> >& colors, const char* output_name)
     {
+        static int frame_count = 0;
+        static double last_time = (double)cv::getTickCount();
+        static double fps = 0.0;
+
+        frame_count++;
+        double current_time = (double)cv::getTickCount();
+        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
+
+        if (elapsed >= 1.0)
+        {
+            fps = frame_count / elapsed;
+            frame_count = 0;
+            last_time = current_time;
+        }
+
         cv::Mat image = bgr.clone();
         cv::Mat mask = bgr.clone();
         int color_index = 0;
@@ -1927,8 +1986,8 @@ namespace detection
             const auto& color = colors[color_index % 80];
             color_index++;
 
-            fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
-                    obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
 
             mask(cv::Rect((int)obj.rect.x, (int)obj.rect.y, (int)objects[i].rect.width, (int)objects[i].rect.height)).setTo(color, objects[i].mask);
 
@@ -1956,7 +2015,16 @@ namespace detection
         float blended_alpha = 0.5;
         image = (1 - blended_alpha) * mask + blended_alpha * image;
 
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        char fps_text[64];
+        sprintf(fps_text, "FPS: %.2f", fps);
+        int baseLine = 0;
+        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
+        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                    cv::Scalar(0, 255, 0), 1);
+
+        cv::imshow(output_name, image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
     }
 
     static void draw_objects_palm(const cv::Mat& bgr, const std::vector<PalmObject>& objects, const char* output_name)
