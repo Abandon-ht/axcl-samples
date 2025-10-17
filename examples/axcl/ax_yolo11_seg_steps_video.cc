@@ -188,7 +188,7 @@ void captureFrames(cv::VideoCapture& cap, FrameQueue& frame_queue, std::atomic<b
             capture_stop = true;
             break;
         }
-        
+        cv::flip(frame, frame, 1);
         frame_queue.push(frame);
         
         // Optional: Print capture stats
