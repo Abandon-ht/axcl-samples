@@ -1,7 +1,7 @@
 /*
  * AXERA is pleased to support the open source community by making ax-samples available.
  *
- * Copyright (c) 2024, AXERA Semiconductor Co., Ltd. All rights reserved.
+ * Copyright (c) 2022, AXERA Semiconductor (Shanghai) Co., Ltd. All rights reserved.
  *
  * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,11 +13,14 @@
  * CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 /*
  * Note: For the YOLO11 series exported by the ultralytics project.
+ * Author: ZHEQIUSHUI
  * Author: QQC
  * Modified to process video input with multi-threading.
  */
+
 #include <cstdio>
 #include <cstring>
 #include <numeric>
@@ -38,18 +41,39 @@
 
 const int DEFAULT_IMG_H = 640;
 const int DEFAULT_IMG_W = 640;
-// const char *CLASS_NAMES[] = {
-//     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-//     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-//     "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-//     "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-//     "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-//     "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-//     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-//     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-//     "hair drier", "toothbrush"};
-const char *CLASS_NAMES[] = {"face"};
+
+const char *CLASS_NAMES[] = {
+    "hand",
+};
+
 int NUM_CLASS = 1;
+int NUM_POINT = 21;
+
+const std::vector<std::vector<uint8_t>> KPS_COLORS = {
+    {0, 255, 0}, {0, 255, 0}, {0, 255, 0}, {0, 255, 0},
+    {255, 128, 0}, {255, 128, 0}, {255, 128, 0}, {255, 128, 0},
+    {51, 153, 255}, {51, 153, 255}, {51, 153, 255}, {51, 153, 255},
+    {255, 51, 255}, {255, 51, 255}, {255, 51, 255}, {255, 51, 255},
+    {128, 0, 255}, {128, 0, 255}, {128, 0, 255}, {128, 0, 255},
+    {255, 255, 0}
+};
+
+const std::vector<std::vector<uint8_t>> LIMB_COLORS = {
+    {0, 255, 0}, {0, 255, 0}, {0, 255, 0}, {0, 255, 0},
+    {255, 128, 0}, {255, 128, 0}, {255, 128, 0}, {255, 128, 0},
+    {51, 153, 255}, {51, 153, 255}, {51, 153, 255}, {51, 153, 255},
+    {255, 51, 255}, {255, 51, 255}, {255, 51, 255}, {255, 51, 255},
+    {128, 0, 255}, {128, 0, 255}, {128, 0, 255}, {128, 0, 255}
+};
+
+const std::vector<std::vector<uint8_t>> SKELETON = {
+    {0, 1}, {1, 2}, {2, 3}, {3, 4},
+    {0, 5}, {5, 6}, {6, 7}, {7, 8},
+    {0, 9}, {9, 10}, {10, 11}, {11, 12},
+    {0, 13}, {13, 14}, {14, 15}, {15, 16},
+    {0, 17}, {17, 18}, {18, 19}, {19, 20}
+};
+
 const int DEFAULT_LOOP_COUNT = 1;
 const float PROB_THRESHOLD = 0.45f;
 const float NMS_THRESHOLD = 0.45f;
@@ -113,20 +137,31 @@ namespace ax
     {
         std::vector<detection::Object> proposals;
         std::vector<detection::Object> objects;
+
+        float *output_ptr[3] = {(float *)output[0].pVirAddr,      // 1*80*80*65
+                                (float *)output[1].pVirAddr,      // 1*40*40*65
+                                (float *)output[2].pVirAddr};     // 1*20*20*65
+        float *output_kps_ptr[3] = {(float *)output[3].pVirAddr,  // 1*80*80*51
+                                    (float *)output[4].pVirAddr,  // 1*40*40*51
+                                    (float *)output[5].pVirAddr}; // 1*20*20*51
+
         for (int i = 0; i < 3; ++i)
         {
-            auto feat_ptr = (float *)output[i].pVirAddr;
+            auto feat_ptr = output_ptr[i];
+            auto feat_kps_ptr = output_kps_ptr[i];
             int32_t stride = (1 << i) * 8;
-            detection::generate_proposals_yolov8_native(stride, feat_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_CLASS);
+            detection::generate_proposals_yolov8_pose_native(stride, feat_ptr, feat_kps_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_POINT, NUM_CLASS);
         }
-        detection::get_out_bbox(proposals, objects, NMS_THRESHOLD, input_h, input_w, mat.rows, mat.cols);
-        detection::draw_objects(mat, objects, CLASS_NAMES, "LLM8850 Demo");
+
+        detection::get_out_bbox_kps(proposals, objects, NMS_THRESHOLD, input_h, input_w, mat.rows, mat.cols);
+        detection::draw_keypoints(mat, objects, KPS_COLORS, LIMB_COLORS, SKELETON, "yolo11_pose_out");
     }
 
     bool run_model(const std::string &model, const std::vector<uint8_t> &data, cv::Mat &mat, int input_h, int input_w)
     {
         static ax_runner_axcl runner; // Make runner static to initialize once
         static bool is_initialized = false;
+
         if (!is_initialized)
         {
             int ret = runner.init(model.c_str());
@@ -139,6 +174,8 @@ namespace ax
         }
         // 2. insert input
         memcpy(runner.get_input(0).pVirAddr, data.data(), data.size());
+
+        // 9. run model
         std::vector<float> time_costs = {0};
         int ret = runner.inference();
         if (ret != 0)
@@ -146,8 +183,10 @@ namespace ax
             fprintf(stderr, "Model inference failed.\n");
             return false;
         }
+
         // 10. get result
         post_process(runner.get_outputs_ptr(0), runner.get_num_outputs(), mat, input_w, input_h, time_costs);
+
         return true;
     }
 } // namespace ax
@@ -168,7 +207,7 @@ void captureFrames(cv::VideoCapture& cap, FrameQueue& frame_queue, std::atomic<b
             capture_stop = true;
             break;
         }
-        cv::flip(frame, frame, 1);
+        
         frame_queue.push(frame);
         
         // Optional: Print capture stats
@@ -294,7 +333,7 @@ int main(int argc, char *argv[])
     std::vector<uint8_t> resized_image;
     resized_image.resize(input_size[0] * input_size[1] * 3);
 
-    fprintf(stdout, "Starting video processing. Press 'q' or 'ESC' to quit.\n");
+    fprintf(stdout, "Starting pose detection processing. Press 'q' or 'ESC' to quit.\n");
 
     while (!capture_stop)
     {

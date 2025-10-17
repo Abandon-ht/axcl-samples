@@ -1,7 +1,7 @@
 /*
  * AXERA is pleased to support the open source community by making ax-samples available.
  *
- * Copyright (c) 2024, AXERA Semiconductor Co., Ltd. All rights reserved.
+ * Copyright (c) 2022, AXERA Semiconductor (Shanghai) Co., Ltd. All rights reserved.
  *
  * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,11 +13,12 @@
  * CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 /*
- * Note: For the YOLO11 series exported by the ultralytics project.
- * Author: QQC
+ * Author: ZHEQIUSHUI
  * Modified to process video input with multi-threading.
  */
+
 #include <cstdio>
 #include <cstring>
 #include <numeric>
@@ -27,32 +28,21 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+
 #include "base/common.hpp"
 #include "base/detection.hpp"
+
 #include "utilities/args.hpp"
 #include "utilities/cmdline.hpp"
 #include "utilities/file.hpp"
 #include "utilities/timer.hpp"
+
 #include <axcl.h>
 #include "ax_model_runner/ax_model_runner_axcl.hpp"
 
-const int DEFAULT_IMG_H = 640;
-const int DEFAULT_IMG_W = 640;
-// const char *CLASS_NAMES[] = {
-//     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-//     "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-//     "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-//     "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-//     "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-//     "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-//     "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-//     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-//     "hair drier", "toothbrush"};
-const char *CLASS_NAMES[] = {"face"};
-int NUM_CLASS = 1;
+const int DEFAULT_IMG_H = 518;
+const int DEFAULT_IMG_W = 518;
 const int DEFAULT_LOOP_COUNT = 1;
-const float PROB_THRESHOLD = 0.45f;
-const float NMS_THRESHOLD = 0.45f;
 const int QUEUE_SIZE = 2;
 
 // Frame queue structure
@@ -109,18 +99,26 @@ public:
 
 namespace ax
 {
-    void post_process(const ax_runner_tensor_t *output, const int nOutputSize, cv::Mat &mat, int input_w, int input_h, const std::vector<float> &time_costs)
+    void post_process(const ax_runner_tensor_t *output, const int nOutputSize, cv::Mat &mat, const std::vector<float> &time_costs)
     {
-        std::vector<detection::Object> proposals;
-        std::vector<detection::Object> objects;
-        for (int i = 0; i < 3; ++i)
-        {
-            auto feat_ptr = (float *)output[i].pVirAddr;
-            int32_t stride = (1 << i) * 8;
-            detection::generate_proposals_yolov8_native(stride, feat_ptr, PROB_THRESHOLD, proposals, input_w, input_h, NUM_CLASS);
-        }
-        detection::get_out_bbox(proposals, objects, NMS_THRESHOLD, input_h, input_w, mat.rows, mat.cols);
-        detection::draw_objects(mat, objects, CLASS_NAMES, "LLM8850 Demo");
+        cv::Mat feature(output[0].vShape[2], output[0].vShape[3], CV_32FC1, (float *)output[0].pVirAddr);
+
+        double minVal, maxVal;
+        cv::minMaxLoc(feature, &minVal, &maxVal);
+
+        feature -= minVal;
+        feature /= (maxVal - minVal);
+        // feature = 1.f - feature;
+        feature *= 255;
+
+        feature.convertTo(feature, CV_8UC1);
+
+        cv::Mat dst(feature.rows, feature.cols, CV_8UC3);
+        cv::applyColorMap(feature, dst, cv::ColormapTypes::COLORMAP_MAGMA);
+        cv::resize(dst, dst, cv::Size(mat.cols, mat.rows));
+
+        // cv::hconcat(std::vector<cv::Mat>{mat, dst}, dst);
+        cv::imshow("Depth Anything", dst);
     }
 
     bool run_model(const std::string &model, const std::vector<uint8_t> &data, cv::Mat &mat, int input_h, int input_w)
@@ -147,7 +145,7 @@ namespace ax
             return false;
         }
         // 10. get result
-        post_process(runner.get_outputs_ptr(0), runner.get_num_outputs(), mat, input_w, input_h, time_costs);
+        post_process(runner.get_outputs_ptr(0), runner.get_num_outputs(), mat, time_costs);
         return true;
     }
 } // namespace ax
@@ -168,7 +166,7 @@ void captureFrames(cv::VideoCapture& cap, FrameQueue& frame_queue, std::atomic<b
             capture_stop = true;
             break;
         }
-        cv::flip(frame, frame, 1);
+        
         frame_queue.push(frame);
         
         // Optional: Print capture stats
@@ -307,9 +305,9 @@ int main(int argc, char *argv[])
             break;
         }
 
-        timer t_letterbox;
-        common::get_input_data_letterbox(frame, resized_image, input_size[0], input_size[1]);
-        float letterbox_time = t_letterbox.cost();
+        timer t_preprocess;
+        common::get_input_data_no_letterbox(frame, resized_image, input_size[0], input_size[1], true);
+        float preprocess_time = t_preprocess.cost();
 
         timer t_runmodel;
         bool ok = ax::run_model(model_file, resized_image, frame, input_size[0], input_size[1]);
@@ -322,8 +320,8 @@ int main(int argc, char *argv[])
 
         float total_time = t_total.cost();
         fprintf(stdout,
-                "Letterbox: %.2f ms | RunModel: %.2f ms | Total: %.2f ms | Queue size: %zu\n",
-                letterbox_time, runmodel_time, total_time, frame_queue.size());
+                "Preprocess: %.2f ms | RunModel: %.2f ms | Total: %.2f ms | Queue size: %zu\n",
+                preprocess_time, runmodel_time, total_time, frame_queue.size());
 
         // Check for exit key (non-blocking)
         char key = (char)cv::waitKey(1);
