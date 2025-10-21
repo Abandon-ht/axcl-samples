@@ -28,6 +28,8 @@
 #include <string>
 #include <iostream>
 
+#include "base/detection.hpp"
+
 namespace pose
 {
     typedef struct
