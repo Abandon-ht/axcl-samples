@@ -41,3 +41,7 @@ axera_example(axcl_palm_detection ax_palm_detection_steps.cc)
 axera_example(axcl_handpose ax_handpose_steps.cc)
 axera_example(axcl_depth_anything ax_depth_anything_steps.cc)
 
+axera_example(ax_yolo11_video ax_yolo11_steps_video.cc)
+axera_example(ax_yolo11_seg_video ax_yolo11_seg_steps_video.cc)
+axera_example(ax_yolo11_pose_video ax_yolo11_pose_steps_video.cc)
+axera_example(axcl_depth_anything_video ax_depth_anything_steps_video.cc)
