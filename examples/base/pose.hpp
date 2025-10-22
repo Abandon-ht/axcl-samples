@@ -363,6 +363,67 @@ namespace pose
         cv::imwrite("./hand_pose_out.png", img);
     }
 
+    static inline void draw_result_hand_on_image(cv::Mat& img,
+                                                 ai_hand_parts_s& pose,
+                                                 int joints_num,
+                                                 const cv::Mat& affine_inv)
+    {
+        for (int i = 0; i < joints_num; i++)
+        {
+            double rx = pose.keypoints[i].x * 224;
+            double ry = pose.keypoints[i].y * 224;
+
+            double ox = affine_inv.at<double>(0,0) * rx +
+                        affine_inv.at<double>(0,1) * ry +
+                        affine_inv.at<double>(0,2);
+            double oy = affine_inv.at<double>(1,0) * rx +
+                        affine_inv.at<double>(1,1) * ry +
+                        affine_inv.at<double>(1,2);
+
+            int x = std::max(std::min((int)ox, img.cols - 1), 0);
+            int y = std::max(std::min((int)oy, img.rows - 1), 0);
+            cv::circle(img, cv::Point(x, y), 4, cv::Scalar(0, 0, 255), cv::FILLED);
+        }
+
+        cv::Scalar color;
+        for (auto& element : hand_pairs)
+        {
+            switch (element.left_right_neutral)
+            {
+            case 0: color = cv::Scalar(10, 215, 255); break;
+            case 1: color = cv::Scalar(255, 115, 55); break;
+            case 2: color = cv::Scalar(5, 255, 55);   break;
+            case 3: color = cv::Scalar(25, 15, 255);  break;
+            default: color = cv::Scalar(225, 15, 55); break;
+            }
+
+            double rx1 = pose.keypoints[element.connection[0]].x * 224;
+            double ry1 = pose.keypoints[element.connection[0]].y * 224;
+            double rx2 = pose.keypoints[element.connection[1]].x * 224;
+            double ry2 = pose.keypoints[element.connection[1]].y * 224;
+
+            double ox1 = affine_inv.at<double>(0,0) * rx1 +
+                         affine_inv.at<double>(0,1) * ry1 +
+                         affine_inv.at<double>(0,2);
+            double oy1 = affine_inv.at<double>(1,0) * rx1 +
+                         affine_inv.at<double>(1,1) * ry1 +
+                         affine_inv.at<double>(1,2);
+            double ox2 = affine_inv.at<double>(0,0) * rx2 +
+                         affine_inv.at<double>(0,1) * ry2 +
+                         affine_inv.at<double>(0,2);
+            double oy2 = affine_inv.at<double>(1,0) * rx2 +
+                         affine_inv.at<double>(1,1) * ry2 +
+                         affine_inv.at<double>(1,2);
+
+            cv::Point p1(std::max(std::min((int)ox1, img.cols - 1), 0),
+                         std::max(std::min((int)oy1, img.rows - 1), 0));
+            cv::Point p2(std::max(std::min((int)ox2, img.cols - 1), 0),
+                         std::max(std::min((int)oy2, img.rows - 1), 0));
+
+            cv::line(img, p1, p2, color, 2);
+        }
+    }
+
     static inline void post_process(float* data, ai_body_parts_s& pose, int joint_num, int img_h, int img_w)
     {
         int heatmap_width = img_w / 4;

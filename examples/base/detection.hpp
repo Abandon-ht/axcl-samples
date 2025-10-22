@@ -21,83 +21,13 @@
 #pragma once
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
-#include <stdio.h>
-#include <stdlib.h>
-#include <termios.h>
-#include <unistd.h>
-#include <fcntl.h>
-// #include <fstream>  // 用于文件写入
+
 #include <cstdint>
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 #include <string>
-
-FILE *serial = NULL; // 串口文件指针
-
-int serial_init(const char *device) {
-    int fd = open(device, O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd < 0) {
-        perror("open serial port");
-        return -1;
-    }
-
-    // 配置串口
-    struct termios tty;
-    if (tcgetattr(fd, &tty) != 0) {
-        perror("tcgetattr");
-        close(fd);
-        return -1;
-    }
-
-    // 设置输入/输出波特率
-    cfsetospeed(&tty, B115200);
-    cfsetispeed(&tty, B115200);
-
-    // 8N1 配置
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8; // 8位数据位
-    tty.c_cflag &= ~PARENB;                     // 禁用校验位
-    tty.c_cflag &= ~CSTOPB;                     // 1位停止位
-    tty.c_cflag |= (CLOCAL | CREAD);             // 本地连接, 允许读取
-    
-    tty.c_cflag &= ~CRTSCTS;                    // 禁用硬件流控
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);     // 禁用软件流控
-    tty.c_lflag = 0;                            // 原始输入模式
-    tty.c_oflag = 0;                            // 原始输出模式
-    tty.c_cc[VMIN]  = 0;                        // 非阻塞读取
-    tty.c_cc[VTIME] = 10;                       // 读取超时（1秒）
-
-    if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        perror("tcsetattr");
-        close(fd);
-        return -1;
-    }
-
-    // 用 FILE* 封装 fd，这样可以用 fprintf/fwrite
-    serial = fdopen(fd, "w");
-    if (!serial) {
-        perror("fdopen");
-        close(fd);
-        return -1;
-    }
-
-    return 0;
-}
-
-void serial_write(const char *msg) {
-    if (!serial) return;
-    fprintf(serial, "%s", msg);
-    fflush(serial); // 强制发送
-}
-
-void serial_close() {
-    if (serial) {
-        fclose(serial); // 会自动关闭文件描述符
-        serial = NULL;
-    }
-}
-
 namespace detection
 {
     typedef struct
@@ -1874,31 +1804,19 @@ namespace detection
         }
     }
 
-    static void draw_objects2(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const char* output_name, double fontScale = 0.5, int thickness = 1)
+    static cv::Mat draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const char* output_name, double fontScale = 0.5, int thickness = 1)
     {
         static const std::vector<cv::Scalar> COCO_COLORS = {
             {128, 56, 0, 255}, {128, 226, 255, 0}, {128, 0, 94, 255}, {128, 0, 37, 255}, {128, 0, 255, 94}, {128, 255, 226, 0}, {128, 0, 18, 255}, {128, 255, 151, 0}, {128, 170, 0, 255}, {128, 0, 255, 56}, {128, 255, 0, 75}, {128, 0, 75, 255}, {128, 0, 255, 169}, {128, 255, 0, 207}, {128, 75, 255, 0}, {128, 207, 0, 255}, {128, 37, 0, 255}, {128, 0, 207, 255}, {128, 94, 0, 255}, {128, 0, 255, 113}, {128, 255, 18, 0}, {128, 255, 0, 56}, {128, 18, 0, 255}, {128, 0, 255, 226}, {128, 170, 255, 0}, {128, 255, 0, 245}, {128, 151, 255, 0}, {128, 132, 255, 0}, {128, 75, 0, 255}, {128, 151, 0, 255}, {128, 0, 151, 255}, {128, 132, 0, 255}, {128, 0, 255, 245}, {128, 255, 132, 0}, {128, 226, 0, 255}, {128, 255, 37, 0}, {128, 207, 255, 0}, {128, 0, 255, 207}, {128, 94, 255, 0}, {128, 0, 226, 255}, {128, 56, 255, 0}, {128, 255, 94, 0}, {128, 255, 113, 0}, {128, 0, 132, 255}, {128, 255, 0, 132}, {128, 255, 170, 0}, {128, 255, 0, 188}, {128, 113, 255, 0}, {128, 245, 0, 255}, {128, 113, 0, 255}, {128, 255, 188, 0}, {128, 0, 113, 255}, {128, 255, 0, 0}, {128, 0, 56, 255}, {128, 255, 0, 113}, {128, 0, 255, 188}, {128, 255, 0, 94}, {128, 255, 0, 18}, {128, 18, 255, 0}, {128, 0, 255, 132}, {128, 0, 188, 255}, {128, 0, 245, 255}, {128, 0, 169, 255}, {128, 37, 255, 0}, {128, 255, 0, 151}, {128, 188, 0, 255}, {128, 0, 255, 37}, {128, 0, 255, 0}, {128, 255, 0, 170}, {128, 255, 0, 37}, {128, 255, 75, 0}, {128, 0, 0, 255}, {128, 255, 207, 0}, {128, 255, 0, 226}, {128, 255, 245, 0}, {128, 188, 255, 0}, {128, 0, 255, 18}, {128, 0, 255, 75}, {128, 0, 255, 151}, {128, 255, 56, 0}, {128, 245, 255, 0}};
-
-        static int frame_count = 0;
-        static double last_time = (double)cv::getTickCount();
-        static double fps = 0.0;
-
-        frame_count++;
-        double current_time = (double)cv::getTickCount();
-        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
-
-        if (elapsed >= 1.0)
-        {
-            fps = frame_count / elapsed;
-            frame_count = 0;
-            last_time = current_time;
-        }
-
         cv::Mat image = bgr.clone();
 
         for (size_t i = 0; i < objects.size(); i++)
         {
             const Object& obj = objects[i];
+
+            // fprintf(stdout, "%2d: %3.0f%%, [%4.0f, %4.0f, %4.0f, %4.0f], %s\n", obj.label, obj.prob * 100, obj.rect.x,
+            //         obj.rect.y, obj.rect.x + obj.rect.width, obj.rect.y + obj.rect.height, class_names[obj.label]);
+
             cv::rectangle(image, obj.rect, COCO_COLORS[obj.label], thickness);
 
             char text[256];
@@ -1921,155 +1839,13 @@ namespace detection
                         cv::Scalar(255, 255, 255), thickness);
         }
 
-        char fps_text[64];
-        sprintf(fps_text, "FPS: %.2f", fps);
-        int baseLine = 0;
-        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, thickness, &baseLine);
-        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
-        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                    cv::Scalar(0, 255, 0), thickness);
-
-        cv::imshow(output_name, image);
+        // cv::imwrite(std::string(output_name) + ".jpg", image);
+        return image;
     }
 
-
-    static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const char* output_name, double fontScale = 0.5, int thickness = 1)
+    static cv::Mat draw_keypoints(const cv::Mat& bgr, const std::vector<Object>& objects, const std::vector<std::vector<uint8_t> >& kps_colors, const std::vector<std::vector<uint8_t> >& limb_colors,
+                               const std::vector<std::vector<uint8_t> >& skeleton, const char* output_name, double fontScale = 0.5, int thickness = 1)
     {
-        static bool serial_init_flag = 0;
-        if (serial_init_flag == 0) {
-            serial_init("/dev/ttyACM0");
-            serial_init_flag = 1;
-        }
-        static const std::vector<cv::Scalar> COCO_COLORS = {
-            {128, 56, 0, 255}, {128, 226, 255, 0}, {128, 0, 94, 255}, {128, 0, 37, 255}, {128, 0, 255, 94}, {128, 255, 226, 0}, {128, 0, 18, 255}, {128, 255, 151, 0}, {128, 170, 0, 255}, {128, 0, 255, 56}, {128, 255, 0, 75}, {128, 0, 75, 255}, {128, 0, 255, 169}, {128, 255, 0, 207}, {128, 75, 255, 0}, {128, 207, 0, 255}, {128, 37, 0, 255}, {128, 0, 207, 255}, {128, 94, 0, 255}, {128, 0, 255, 113}, {128, 255, 18, 0}, {128, 255, 0, 56}, {128, 18, 0, 255}, {128, 0, 255, 226}, {128, 170, 255, 0}, {128, 255, 0, 245}, {128, 151, 255, 0}, {128, 132, 255, 0}, {128, 75, 0, 255}, {128, 151, 0, 255}, {128, 0, 151, 255}, {128, 132, 0, 255}, {128, 0, 255, 245}, {128, 255, 132, 0}, {128, 226, 0, 255}, {128, 255, 37, 0}, {128, 207, 255, 0}, {128, 0, 255, 207}, {128, 94, 255, 0}, {128, 0, 226, 255}, {128, 56, 255, 0}, {128, 255, 94, 0}, {128, 255, 113, 0}, {128, 0, 132, 255}, {128, 255, 0, 132}, {128, 255, 170, 0}, {128, 255, 0, 188}, {128, 113, 255, 0}, {128, 245, 0, 255}, {128, 113, 0, 255}, {128, 255, 188, 0}, {128, 0, 113, 255}, {128, 255, 0, 0}, {128, 0, 56, 255}, {128, 255, 0, 113}, {128, 0, 255, 188}, {128, 255, 0, 94}, {128, 255, 0, 18}, {128, 18, 255, 0}, {128, 0, 255, 132}, {128, 0, 188, 255}, {128, 0, 245, 255}, {128, 0, 169, 255}, {128, 37, 255, 0}, {128, 255, 0, 151}, {128, 188, 0, 255}, {128, 0, 255, 37}, {128, 0, 255, 0}, {128, 255, 0, 170}, {128, 255, 0, 37}, {128, 255, 75, 0}, {128, 0, 0, 255}, {128, 255, 207, 0}, {128, 255, 0, 226}, {128, 255, 245, 0}, {128, 188, 255, 0}, {128, 0, 255, 18}, {128, 0, 255, 75}, {128, 0, 255, 151}, {128, 255, 56, 0}, {128, 245, 255, 0}};
-
-        static int frame_count = 0;
-        static double last_time = (double)cv::getTickCount();
-        static double fps = 0.0;
-
-        frame_count++;
-        double current_time = (double)cv::getTickCount();
-        double elapsed = (current_time - last_time) / cv::getTickFrequency();
-        if (elapsed >= 1.0)
-        {
-            fps = frame_count / elapsed;
-            frame_count = 0;
-            last_time = current_time;
-        }
-
-        cv::Mat image = bgr.clone();
-
-        static int last_x = -1, last_y = -1;
-        int largest_index = -1;
-        int largest_area = 0;
-        for (size_t i = 0; i < objects.size(); i++)
-        {
-            const Object& obj = objects[i];
-            int w = obj.rect.width;
-            int h = obj.rect.height;
-
-            if (w > 100 && h > 100)
-            {
-                int area = w * h;
-                if (area > largest_area)
-                {
-                    largest_area = area;
-                    largest_index = (int)i;
-                }
-            }
-        }
-
-        for (size_t i = 0; i < objects.size(); i++)
-        {
-            const Object& obj = objects[i];
-            cv::rectangle(image, obj.rect, COCO_COLORS[obj.label], thickness);
-
-            char text[256];
-            sprintf(text, "%s %.1f%%", class_names[obj.label], obj.prob * 100);
-
-            int baseLine = 0;
-            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, fontScale, thickness, &baseLine);
-
-            int x = obj.rect.x;
-            int y = obj.rect.y - label_size.height - baseLine;
-            if (y < 0)
-                y = 0;
-            if (x + label_size.width > image.cols)
-                x = image.cols - label_size.width;
-
-            cv::rectangle(image, cv::Rect(cv::Point(x, y), cv::Size(label_size.width, label_size.height + baseLine)),
-                          cv::Scalar(0, 0, 0), -1);
-
-            cv::putText(image, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, fontScale,
-                        cv::Scalar(255, 255, 255), thickness);
-        }
-
-        if (largest_index >= 0)
-        {
-            const Object& obj = objects[largest_index];
-            int center_x = obj.rect.x + obj.rect.width / 2;
-            int center_y = obj.rect.y + obj.rect.height / 2;
-
-            // 设置原始坐标范围（要根据图像分辨率或实际需求调整）
-            float source_min = 0.0f;
-            float source_max = 1000.0f; // 假设图像宽度为1000像素
-            float target_min = 150.0f;
-            float target_max = 600.0f;
-
-            // 线性映射 center_x 到 150 ~ 600
-            float scaled_x = target_min + 
-                            ( (center_x - source_min) / (source_max - source_min) ) *
-                            (target_max - target_min);
-
-            // y变换
-            int transformed_y = 700 - center_y;
-
-            if (last_x >= 0 && last_y >= 0)
-            {
-                if (std::fabs(scaled_x - last_x) > 10 || std::fabs(transformed_y - last_y) > 10)
-                {
-                    char buf[64];
-                    snprintf(buf, sizeof(buf), "{\"x\":%.2f,\"y\":%d}\n", scaled_x, transformed_y);
-                    serial_write(buf);
-                }
-            }
-            last_x = scaled_x;
-            last_y = transformed_y;
-        }
-
-        char fps_text[64];
-        sprintf(fps_text, "FPS: %.2f", fps);
-        int baseLine = 0;
-        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, thickness, &baseLine);
-        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
-        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                    cv::Scalar(0, 255, 0), thickness);
-
-        cv::imshow(output_name, image);
-        cv::imwrite(std::string(output_name) + ".jpg", image);
-    }
-
-    static void draw_keypoints(const cv::Mat& bgr, const std::vector<Object>& objects,
-                               const std::vector<std::vector<uint8_t> >& kps_colors,
-                               const std::vector<std::vector<uint8_t> >& limb_colors,
-                               const std::vector<std::vector<uint8_t> >& skeleton,
-                               const char* output_name)
-    {
-        static int frame_count = 0;
-        static double last_time = (double)cv::getTickCount();
-        static double fps = 0.0;
-
-        frame_count++;
-        double current_time = (double)cv::getTickCount();
-        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
-
-        if (elapsed >= 1.0)
-        {
-            fps = frame_count / elapsed;
-            frame_count = 0;
-            last_time = current_time;
-        }
-
         cv::Mat image = bgr.clone();
 
         for (size_t i = 0; i < objects.size(); i++)
@@ -2085,7 +1861,7 @@ namespace detection
             sprintf(text, "person %.1f%%", obj.prob * 100);
 
             int baseLine = 0;
-            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+            cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, fontScale, thickness, &baseLine);
 
             int x = obj.rect.x;
             int y = obj.rect.y - label_size.height - baseLine;
@@ -2097,12 +1873,11 @@ namespace detection
             cv::rectangle(image, cv::Rect(cv::Point(x, y), cv::Size(label_size.width, label_size.height + baseLine)),
                           cv::Scalar(255, 255, 255), -1);
 
-            cv::putText(image, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, 0.5,
+            cv::putText(image, text, cv::Point(x, y + label_size.height), cv::FONT_HERSHEY_SIMPLEX, fontScale,
                         cv::Scalar(0, 0, 0));
-            int num_point = obj.kps_feat.size() / 3;
-            int max_loop = std::max(num_point, (int)skeleton.size());
 
-            for (int j = 0; j < max_loop; j++)
+            const int num_point = obj.kps_feat.size() / 3;
+            for (int j = 0; j < num_point + 2; j++)
             {
                 // draw circle
                 if (j < num_point)
@@ -2110,69 +1885,37 @@ namespace detection
                     int kps_x = std::round(obj.kps_feat[j * 3]);
                     int kps_y = std::round(obj.kps_feat[j * 3 + 1]);
                     float kps_s = obj.kps_feat[j * 3 + 2];
-                    if (kps_s > 0.5f && j < (int)kps_colors.size())
+                    if (kps_s > 0.5f)
                     {
                         auto kps_color = cv::Scalar(kps_colors[j][0], kps_colors[j][1], kps_colors[j][2]);
                         cv::circle(image, {kps_x, kps_y}, 5, kps_color, -1);
                     }
                 }
                 // draw line
-                if (j < (int)skeleton.size())
+                auto& ske = skeleton[j];
+                int pos1_x = obj.kps_feat[(ske[0] - 1) * 3];
+                int pos1_y = obj.kps_feat[(ske[0] - 1) * 3 + 1];
+
+                int pos2_x = obj.kps_feat[(ske[1] - 1) * 3];
+                int pos2_y = obj.kps_feat[(ske[1] - 1) * 3 + 1];
+
+                float pos1_s = obj.kps_feat[(ske[0] - 1) * 3 + 2];
+                float pos2_s = obj.kps_feat[(ske[1] - 1) * 3 + 2];
+
+                if (pos1_s > 0.5f && pos2_s > 0.5f)
                 {
-                    auto &ske = skeleton[j];
-                    int id1 = ske[0];
-                    int id2 = ske[1];
-
-                    if (id1 < num_point && id2 < num_point)
-                    {
-                        int pos1_x = obj.kps_feat[id1 * 3];
-                        int pos1_y = obj.kps_feat[id1 * 3 + 1];
-                        int pos2_x = obj.kps_feat[id2 * 3];
-                        int pos2_y = obj.kps_feat[id2 * 3 + 1];
-                        float pos1_s = obj.kps_feat[id1 * 3 + 2];
-                        float pos2_s = obj.kps_feat[id2 * 3 + 2];
-
-                        if (pos1_s > 0.5f && pos2_s > 0.5f && j < (int)limb_colors.size())
-                        {
-                            auto limb_color = cv::Scalar(limb_colors[j][0],
-                                                        limb_colors[j][1],
-                                                        limb_colors[j][2]);
-                            cv::line(image, {pos1_x, pos1_y}, {pos2_x, pos2_y}, limb_color, 2);
-                        }
-                    }
+                    auto limb_color = cv::Scalar(limb_colors[j][0], limb_colors[j][1], limb_colors[j][2]);
+                    cv::line(image, {pos1_x, pos1_y}, {pos2_x, pos2_y}, limb_color, 2);
                 }
             }
         }
-
-        char fps_text[64];
-        sprintf(fps_text, "FPS: %.2f", fps);
-        int baseLine = 0;
-        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
-        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                    cv::Scalar(0, 255, 0), 1);
-
-        cv::imshow(output_name, image);
+        // cv::imshow(output_name, image);
         // cv::imwrite(std::string(output_name) + ".jpg", image);
+        return image;
     }
 
-    static void draw_objects_mask(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const std::vector<std::vector<uint8_t> >& colors, const char* output_name)
+    static cv::Mat draw_objects_mask(const cv::Mat& bgr, const std::vector<Object>& objects, const char** class_names, const std::vector<std::vector<uint8_t> >& colors, const char* output_name)
     {
-        static int frame_count = 0;
-        static double last_time = (double)cv::getTickCount();
-        static double fps = 0.0;
-
-        frame_count++;
-        double current_time = (double)cv::getTickCount();
-        double elapsed = (current_time - last_time) / cv::getTickFrequency(); // 秒
-
-        if (elapsed >= 1.0)
-        {
-            fps = frame_count / elapsed;
-            frame_count = 0;
-            last_time = current_time;
-        }
-
         cv::Mat image = bgr.clone();
         cv::Mat mask = bgr.clone();
         int color_index = 0;
@@ -2212,19 +1955,12 @@ namespace detection
         float blended_alpha = 0.5;
         image = (1 - blended_alpha) * mask + blended_alpha * image;
 
-        char fps_text[64];
-        sprintf(fps_text, "FPS: %.2f", fps);
-        int baseLine = 0;
-        cv::Size fps_size = cv::getTextSize(fps_text, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
-        cv::rectangle(image, cv::Rect(0, 0, fps_size.width + 5, fps_size.height + baseLine + 5), cv::Scalar(0, 0, 0), -1);
-        cv::putText(image, fps_text, cv::Point(2, fps_size.height + 2), cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                    cv::Scalar(0, 255, 0), 1);
-
-        cv::imshow(output_name, image);
+        // cv::imshow(output_name, image);
         // cv::imwrite(std::string(output_name) + ".jpg", image);
+        return image;
     }
 
-    static void draw_objects_palm(const cv::Mat& bgr, const std::vector<PalmObject>& objects, const char* output_name)
+    static cv::Mat draw_objects_palm(const cv::Mat& bgr, const std::vector<PalmObject>& objects, const char* output_name)
     {
         cv::Mat image = bgr.clone();
         for (size_t i = 0; i < objects.size(); i++)
@@ -2237,12 +1973,13 @@ namespace detection
             cv::line(image, obj.vertices[1], obj.vertices[2], cv::Scalar(0, 0, 255), 2, 8, 0);
             cv::line(image, obj.vertices[2], obj.vertices[3], cv::Scalar(0, 0, 255), 2, 8, 0);
             cv::line(image, obj.vertices[3], obj.vertices[0], cv::Scalar(0, 0, 255), 2, 8, 0);
-            for (auto ld : obj.landmarks)
-            {
-                cv::circle(image, ld, 2, cv::Scalar(0, 255, 0), -1, 8);
-            }
+            // for (auto ld : obj.landmarks)
+            // {
+            //     cv::circle(image, ld, 2, cv::Scalar(0, 255, 0), -1, 8);
+            // }
         }
-        cv::imwrite(std::string(output_name) + ".jpg", image);
+        // cv::imshow(std::string(output_name) + ".jpg", image);
+        return image;
     }
 
     static void draw_objects_yolopv2(const cv::Mat& bgr, const std::vector<Object>& objects, const cv::Mat& da_seg_mask, const cv::Mat& ll_seg_mask, const char* output_name)
