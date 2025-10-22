@@ -1,16 +1,24 @@
+// C/C++ 标准库
 #include <cstdio>
 #include <cstring>
-#include <opencv2/opencv.hpp>
 #include <queue>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+
+// 第三方库
+#include <opencv2/opencv.hpp>
+
+// AXCL SDK 相关
 #include <axcl.h>
 #include "ax_model_runner/ax_model_runner_axcl.hpp"
+
+// 项目通用功能模块
 #include "base/common.hpp"
-#include "base/detection.hpp"
-#include "base/pose.hpp"
+#include "base/stackchan.hpp"
+
+// 项目工具类
 #include "utilities/cmdline.hpp"
 #include "utilities/file.hpp"
 #include "utilities/timer.hpp"
@@ -67,6 +75,7 @@ const float NMS_THRESHOLD  = 0.45f;
 static ax_runner_axcl runner;
 static bool initialized = false;
 std::string model_file;
+
 bool init()
 {
     if (initialized) return true;
@@ -77,6 +86,7 @@ bool init()
     initialized = true;
     return true;
 }
+
 void post_process(const ax_runner_tensor_t *output, int nOut, cv::Mat &mat, int iw, int ih)
 {
     using namespace detection;
@@ -88,7 +98,9 @@ void post_process(const ax_runner_tensor_t *output, int nOut, cv::Mat &mat, int 
     }
     get_out_bbox(proposals, objects, NMS_THRESHOLD, ih, iw, mat.rows, mat.cols);
     mat = draw_objects(mat, objects, CLASS_NAMES, "Face Detection", 1.0, 2);
+    process_objects_for_servo(objects);
 }
+
 bool run(cv::Mat &mat, const std::vector<uint8_t> &data, int h, int w)
 {
     if (!init()) return false;
@@ -234,7 +246,7 @@ namespace task_hand {
 const int HAND_JOINTS        = 21;
 const int HAND_IMG_H         = 224;
 const int HAND_IMG_W         = 224;
-const float PROB_THRESHOLD   = 0.45f;
+const float PROB_THRESHOLD   = 0.65f;
 const float NMS_THRESHOLD    = 0.45f;
 const int map_size[2]        = {24, 12};
 const int strides[2]         = {8, 16};
@@ -244,6 +256,7 @@ const float anchor_offset[2] = {0.5f, 0.5f};
 static ax_runner_axcl palm_runner, hand_runner;
 static bool palm_init = false, hand_init = false;
 std::string palm_model_file, hand_model_file;
+
 bool init_palm()
 {
     if (palm_init) return true;
@@ -254,6 +267,7 @@ bool init_palm()
     palm_init = true;
     return true;
 }
+
 bool init_hand()
 {
     if (hand_init) return true;
@@ -297,8 +311,13 @@ void post_process_palm(const ax_runner_tensor_t *out, int iw, int ih, cv::Mat &m
     generate_proposals_palm(proposals, PROB_THRESHOLD, 192, 192, scores_ptr, bboxes_ptr, 2, strides, anchor_size,
                             anchor_offset, map_size, prob_threshold_unsigmoid);
     get_out_bbox_palm(proposals, objects, NMS_THRESHOLD, ih, iw, mat.rows, mat.cols);
-
     cv::Mat mat_draw = mat;
+
+    // 新增静态变量记录上一次识别状态
+    static int last_gesture_id = -1;
+    static int same_count      = 0;
+    const int required_count   = 3;  // 连续次数阈值
+
     for (size_t i = 0; i < objects.size(); i++) {
         cv::Mat hand_roi;
         cv::warpAffine(mat, hand_roi, objects[i].affine_trans_mat, cv::Size(HAND_IMG_W, HAND_IMG_H));
@@ -307,9 +326,36 @@ void post_process_palm(const ax_runner_tensor_t *out, int iw, int ih, cv::Mat &m
         pose::ai_hand_parts_s hand_parts;
         run_hand_model(hand_model_file, hand_image, 1, hand_parts, HAND_IMG_H, HAND_IMG_W);
         pose::draw_result_hand_on_image(mat_draw, hand_parts, HAND_JOINTS, objects[i].affine_trans_mat_inv);
+
+        if (check_palm_objects_size(objects, 0.05, 0.05) == 0) {
+            int gesture_id = classify_gesture(hand_parts);
+            if (gesture_id != -1) {
+                if (gesture_id == last_gesture_id) {
+                    same_count++;
+                } else {
+                    same_count      = 1;
+                    last_gesture_id = gesture_id;
+                }
+
+                if (same_count >= required_count) {
+                    same_count               = 0;
+                    const std::string &label = gesture_defs[gesture_id].label;
+                    if (label == "ok") {
+                        send_motion("reverse");
+                    } else if (label == "one") {
+                        send_motion("shake");
+                    } else if (label == "two") {
+                        send_motion("nod");
+                    } else if (label == "five") {
+                        send_motion("forward");
+                    }
+                }
+            }
+        }
     }
     mat = draw_objects_palm(mat_draw, objects, "Palm detection");
 }
+
 bool run(cv::Mat &mat, const std::vector<uint8_t> &data)
 {
     if (!init_palm()) return false;
@@ -384,6 +430,8 @@ int main(int argc, char **argv)
     cv::Mat frame;
     std::vector<uint8_t> resized(DEFAULT_IMG_H * DEFAULT_IMG_W * 3);
     std::vector<uint8_t> hand_resized(192 * 192 * 3);
+
+    serial_init("/dev/ttyACM0");
 
     while (!stop) {
         if (!fq.pop(frame)) break;
