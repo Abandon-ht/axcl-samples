@@ -444,36 +444,31 @@ int main(int argc, char **argv)
     // std::vector<PerfInfo> perf_stats{{"Yolo11n-detect", 0, 0}, {"Segmentation", 0, 0}, {"Yolo11n-Pose", 0, 0},
     // {"Hand", 0, 0}};
     std::vector<PerfInfo> perf_stats{{"YOLO11n-Detect", 0, 0}, {"YOLO11n-Pose", 0, 0}, {"HandPose", 0, 0}};
-    auto update_fps = [](PerfInfo &p, double ms) {
-        p.time_ms       = ms;
-        double inst_fps = (ms > 0.0) ? 1000.0 / ms : 0.0;
-        if (p.fps == 0)
-            p.fps = inst_fps;
-        else
-            p.fps = 0.9 * p.fps + 0.1 * inst_fps;
-    };
-    auto draw_perf = [](cv::Mat &mat, const std::vector<PerfInfo> &stats) {
-        int x = 10, y = 40;
+    auto update_time_only = [](PerfInfo &p, double ms) { p.time_ms = ms; };
+    auto draw_perf        = [](cv::Mat &mat, const std::vector<PerfInfo> &stats) {
+        int x = 10, y = 25;
         cv::Mat overlay;
         mat.copyTo(overlay);
-        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(800, stats.size() * 45 + 30), cv::Scalar(0, 0, 0), -1);
-        double alpha = 0.5;
+        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(220, stats.size() * 25 + 15),  // 缩小宽度与高度
+                             cv::Scalar(0, 0, 0), -1);
+        double alpha = 0.4;
         cv::addWeighted(overlay, alpha, mat, 1 - alpha, 0, mat);
 
-        const double font_scale     = 1.2;
-        const int thickness         = 2;
-        const int outline_thickness = 4;
+        const double font_scale     = 0.5;
+        const int thickness         = 1;
+        const int outline_thickness = 2;
 
         for (auto &p : stats) {
             char buf[100];
-            snprintf(buf, sizeof(buf), "%s: %.2f ms / %.0f FPS", p.name.c_str(), p.time_ms, p.fps);
+            snprintf(buf, sizeof(buf), "%s: %.1f ms", p.name.c_str(), p.time_ms);
 
-            cv::putText(mat, buf, cv::Point(x + 2, y + 2), cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(0, 0, 0),
-                        outline_thickness);
+            cv::putText(mat, buf, cv::Point(x + 1, y + 1), cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(0, 0, 0),
+                               outline_thickness);
+
             cv::putText(mat, buf, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(0, 255, 255),
-                        thickness);
+                               thickness);
 
-            y += 45;
+            y += 25;
         }
     };
 
@@ -490,7 +485,7 @@ int main(int argc, char **argv)
             int64 start = cv::getTickCount();
             task_face::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
             double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
-            update_fps(perf_stats[0], elapsed_ms);
+            update_time_only(perf_stats[0], elapsed_ms);
         }
 
         // Segmentation (如果需要启用的话，取消注释)
@@ -498,8 +493,6 @@ int main(int argc, char **argv)
         {
             int64 start = cv::getTickCount();
             task_seg::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
-            double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
-            update_fps(perf_stats[1], elapsed_ms);
         }
         */
 
@@ -508,7 +501,7 @@ int main(int argc, char **argv)
             int64 start = cv::getTickCount();
             task_pose::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
             double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
-            update_fps(perf_stats[1], elapsed_ms);
+            update_time_only(perf_stats[1], elapsed_ms);
         }
 
         // Hand
@@ -516,7 +509,7 @@ int main(int argc, char **argv)
             int64 start = cv::getTickCount();
             task_hand::run(canvas, hand_resized);
             double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
-            update_fps(perf_stats[2], elapsed_ms);
+            update_time_only(perf_stats[2], elapsed_ms);
         }
 
         // 绘制性能信息在左上角
