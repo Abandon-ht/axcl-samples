@@ -457,7 +457,7 @@ int main(int argc, char **argv)
         // 画个半透明背景增强可视性
         cv::Mat overlay;
         mat.copyTo(overlay);
-        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(350, stats.size() * 30 + 20), cv::Scalar(0, 0, 0), -1);
+        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(500, stats.size() * 30 + 20), cv::Scalar(0, 0, 0), -1);
         double alpha = 0.4;
         cv::addWeighted(overlay, alpha, mat, 1 - alpha, 0, mat);
 
