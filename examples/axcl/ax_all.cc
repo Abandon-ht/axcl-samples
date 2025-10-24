@@ -413,7 +413,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Video open failed.\n");
         return -1;
     }
-    int mjpg = cv::VideoWriter::fourcc('M','J','P','G');
+    int mjpg = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
     cap.set(cv::CAP_PROP_FOURCC, mjpg);
     cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
@@ -435,15 +435,85 @@ int main(int argc, char **argv)
 
     serial_init("/dev/ttyACM0");
 
+    // ===== 性能统计结构 =====
+    struct PerfInfo {
+        std::string name;
+        double time_ms;
+        double fps;
+    };
+    // std::vector<PerfInfo> perf_stats{{"Yolo11n-detect", 0, 0}, {"Segmentation", 0, 0}, {"Yolo11n-Pose", 0, 0},
+    // {"Hand", 0, 0}};
+    std::vector<PerfInfo> perf_stats{{"YOLO11n-Detect", 0, 0}, {"YOLO11n-Pose", 0, 0}, {"HandPose", 0, 0}};
+    auto update_fps = [](PerfInfo &p, double ms) {
+        p.time_ms       = ms;
+        double inst_fps = (ms > 0.0) ? 1000.0 / ms : 0.0;
+        if (p.fps == 0)
+            p.fps = inst_fps;
+        else
+            p.fps = 0.9 * p.fps + 0.1 * inst_fps;  // 平滑处理
+    };
+    auto draw_perf = [](cv::Mat &mat, const std::vector<PerfInfo> &stats) {
+        int x = 10, y = 30;
+        // 画个半透明背景增强可视性
+        cv::Mat overlay;
+        mat.copyTo(overlay);
+        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(350, stats.size() * 30 + 20), cv::Scalar(0, 0, 0), -1);
+        double alpha = 0.4;
+        cv::addWeighted(overlay, alpha, mat, 1 - alpha, 0, mat);
+
+        for (auto &p : stats) {
+            char buf[100];
+            snprintf(buf, sizeof(buf), "%s: %.2f ms / %.0f FPS", p.name.c_str(), p.time_ms, p.fps);
+            cv::putText(mat, buf, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
+            y += 30;
+        }
+    };
+
+    // ========== 主循环 ==========
     while (!stop) {
         if (!fq.pop(frame)) break;
         cv::Mat canvas = frame.clone();
+
         common::get_input_data_letterbox(frame, resized, DEFAULT_IMG_H, DEFAULT_IMG_W, true);
         common::get_input_data_letterbox(frame, hand_resized, 192, 192, true);
-        task_face::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
-        // task_seg::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
-        task_pose::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
-        task_hand::run(canvas, hand_resized);
+
+        // Face
+        {
+            int64 start = cv::getTickCount();
+            task_face::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
+            double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
+            update_fps(perf_stats[0], elapsed_ms);
+        }
+
+        // Segmentation (如果需要启用的话，取消注释)
+        /*
+        {
+            int64 start = cv::getTickCount();
+            task_seg::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
+            double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
+            update_fps(perf_stats[1], elapsed_ms);
+        }
+        */
+
+        // Pose
+        {
+            int64 start = cv::getTickCount();
+            task_pose::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
+            double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
+            update_fps(perf_stats[1], elapsed_ms);
+        }
+
+        // Hand
+        {
+            int64 start = cv::getTickCount();
+            task_hand::run(canvas, hand_resized);
+            double elapsed_ms = (cv::getTickCount() - start) * 1000.0 / cv::getTickFrequency();
+            update_fps(perf_stats[2], elapsed_ms);
+        }
+
+        // 绘制性能信息在左上角
+        draw_perf(canvas, perf_stats);
+
         cv::imshow("YOLO11 Demo", canvas);
         char key = (char)cv::waitKey(1);
         if (key == 27 || key == 'q') {
