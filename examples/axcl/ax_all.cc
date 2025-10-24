@@ -413,9 +413,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "Video open failed.\n");
         return -1;
     }
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
-    cap.set(cv::CAP_PROP_FPS, 30);
+    int mjpg = cv::VideoWriter::fourcc('M','J','P','G');
+    cap.set(cv::CAP_PROP_FOURCC, mjpg);
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
+    cap.set(cv::CAP_PROP_FPS, 60);
 
     axclInit(0);
     axclrtDeviceList lst;
