@@ -450,22 +450,30 @@ int main(int argc, char **argv)
         if (p.fps == 0)
             p.fps = inst_fps;
         else
-            p.fps = 0.9 * p.fps + 0.1 * inst_fps;  // 平滑处理
+            p.fps = 0.9 * p.fps + 0.1 * inst_fps;
     };
     auto draw_perf = [](cv::Mat &mat, const std::vector<PerfInfo> &stats) {
-        int x = 10, y = 30;
-        // 画个半透明背景增强可视性
+        int x = 10, y = 40;
         cv::Mat overlay;
         mat.copyTo(overlay);
-        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(500, stats.size() * 30 + 20), cv::Scalar(0, 0, 0), -1);
-        double alpha = 0.4;
+        cv::rectangle(overlay, cv::Point(0, 0), cv::Point(800, stats.size() * 45 + 30), cv::Scalar(0, 0, 0), -1);
+        double alpha = 0.5;
         cv::addWeighted(overlay, alpha, mat, 1 - alpha, 0, mat);
+
+        const double font_scale     = 1.2;
+        const int thickness         = 2;
+        const int outline_thickness = 4;
 
         for (auto &p : stats) {
             char buf[100];
             snprintf(buf, sizeof(buf), "%s: %.2f ms / %.0f FPS", p.name.c_str(), p.time_ms, p.fps);
-            cv::putText(mat, buf, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
-            y += 30;
+
+            cv::putText(mat, buf, cv::Point(x + 2, y + 2), cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(0, 0, 0),
+                        outline_thickness);
+            cv::putText(mat, buf, cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(0, 255, 255),
+                        thickness);
+
+            y += 45;
         }
     };
 
