@@ -444,7 +444,7 @@ int main(int argc, char **argv)
         // task_seg::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
         task_pose::run(canvas, resized, DEFAULT_IMG_H, DEFAULT_IMG_W);
         task_hand::run(canvas, hand_resized);
-        cv::imshow("Fusion Output", canvas);
+        cv::imshow("YOLO11 Demo", canvas);
         char key = (char)cv::waitKey(1);
         if (key == 27 || key == 'q') {
             stop = true;

@@ -73,7 +73,6 @@ void serial_write(const char *msg)
     if (!serial) return;
     fprintf(serial, "%s", msg);
     fflush(serial);  // 立即发送
-    std::cout << "[串口发送] " << msg << std::endl;
 }
 
 void serial_close()
@@ -131,7 +130,6 @@ int check_palm_objects_size(const std::vector<detection::PalmObject> &objects, f
     for (const auto &obj : objects) {
         float height = obj.rect.height;
         float width  = obj.rect.width;
-        std::cout << "检测到手掌框尺寸: 宽度=" << width << " 高度=" << height << std::endl;
         if (height > h && width > w) {
             return 0;
         }
@@ -194,7 +192,6 @@ void send_json(const MotionCmd &cmd)
     char buf[128];
     snprintf(buf, sizeof(buf), "{\"mode\":%d,\"x\":%d,\"y\":%d,\"rgb\":%d}\n", cmd.mode, cmd.x, cmd.y, cmd.rgb);
     serial_write(buf);
-    printf("[串口发送] %s", buf);
 }
 
 void send_motion(const std::string &action, int x = 0, int y = 0)
@@ -271,19 +268,6 @@ void process_and_send_coordinates(const std::vector<detection::Object> &objects)
     last_y = transformed_y;
 }
 
-// void controlServo(int centerX, int centerY)
-// {
-//     if (gesture_control_active.load()) {
-//         return;
-//     }
-
-//     float scaled_x    = 150.0f + ((centerX - 0.0f) / 1000.0f) * (600.0f - 150.0f);
-//     int transformed_y = 700 - centerY;
-
-//     std::cout << "[舵机控制] 移动到 X=" << scaled_x << " Y=" << transformed_y << std::endl;
-//     send_motion("pos", static_cast<int>(scaled_x), transformed_y);
-// }
-
 void controlServo(int centerX, int centerY)
 {
     static int last_x = -1;
@@ -302,7 +286,6 @@ void controlServo(int centerX, int centerY)
         return;
     }
 
-    std::cout << "[舵机控制] 移动到 X=" << scaled_x_int << " Y=" << transformed_y << std::endl;
     send_motion("pos", scaled_x_int, transformed_y);
 
     last_x = scaled_x_int;
