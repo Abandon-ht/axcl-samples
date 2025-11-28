@@ -1,4 +1,4 @@
-# AXERA is pleased to support the open source community by making ax-samples available.
+﻿# AXERA is pleased to support the open source community by making ax-samples available.
 #
 # Copyright (c) 2024, Axera Semiconductor Co., Ltd. All rights reserved.
 #
@@ -17,12 +17,27 @@
 
 
 # Set axcl library
-if(NOT AXCL_DIR)
-    include_directories(/usr/include/axcl/)
-    link_directories(/usr/lib/axcl/)
-else()
+if(WIN32)
+    message(STATUS "Configuring for Windows")
+
+    if(NOT AXCL_DIR)
+        set(AXCL_DIR "C:/Users/M5Stack/Downloads/AXCL/axcl/out/axcl_win_x64")
+    endif()
+
     include_directories(${AXCL_DIR}/include)
-    link_directories(${AXCL_DIR}/lib)    
+    link_directories(${AXCL_DIR}/lib)
+
+    set(SPDLOG_LIB_DIR "C:/Users/M5Stack/Downloads/AXCL/axcl/3rdparty/spdlog/win64")
+    link_directories(${SPDLOG_LIB_DIR}/lib)
+
+else()
+    if(NOT AXCL_DIR)
+        include_directories(/usr/include/axcl/)
+        link_directories(/usr/lib/axcl/)
+    else()
+        include_directories(${AXCL_DIR}/include)
+        link_directories(${AXCL_DIR}/lib)
+    endif()
 endif()
 
 

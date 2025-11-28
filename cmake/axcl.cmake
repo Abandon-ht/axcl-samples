@@ -15,6 +15,12 @@
 # Author: ls.wang
 #
 
+if (WIN32)
+    set(AXERA_LIB_PREFIX "lib")
+else()
+    set(AXERA_LIB_PREFIX "")
+endif()
+
 function(axera_example example_name)
     add_executable(${example_name})
 
@@ -29,7 +35,15 @@ function(axera_example example_name)
     # opencv
     target_link_libraries(${example_name} PRIVATE ${OpenCV_LIBS})
 
-    target_link_libraries(${example_name} PRIVATE spdlog axcl_pcie_dma axcl_pcie_msg axcl_token axcl_comm axcl_pkg axcl_rt)
+    target_link_libraries(${example_name} PRIVATE
+        ${AXERA_LIB_PREFIX}spdlog
+        ${AXERA_LIB_PREFIX}axcl_pcie_dma
+        ${AXERA_LIB_PREFIX}axcl_pcie_msg
+        ${AXERA_LIB_PREFIX}axcl_token
+        ${AXERA_LIB_PREFIX}axcl_comm
+        ${AXERA_LIB_PREFIX}axcl_pkg
+        ${AXERA_LIB_PREFIX}axcl_rt
+    )
 
     target_compile_options (${example_name} PUBLIC $<$<COMPILE_LANGUAGE:C,CXX>: -O3>)
 

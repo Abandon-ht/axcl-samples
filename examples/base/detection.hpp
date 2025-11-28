@@ -313,7 +313,7 @@ namespace detection
                             class_index = i;
                             class_score = temp;
 
-                            if (temp >= prob_threshold and class_index != 0)
+                            if (temp >= prob_threshold && class_index != 0)
                             {
                                 // fprintf(stderr, "class_score: %f %d \n", class_score, i);
 
@@ -2370,7 +2370,7 @@ namespace detection
         float y0 = object.landmarks[0].y;
         float x1 = object.landmarks[2].x;
         float y1 = object.landmarks[2].y;
-        float rotation = M_PI * 0.5f - std::atan2(-(y1 - y0), x1 - x0);
+        float rotation = 3.14159265358979323846 * 0.5f - std::atan2(-(y1 - y0), x1 - x0);
 
         float hand_cx;
         float hand_cy;
@@ -2588,6 +2588,9 @@ namespace detection
             return dis_sum;
         }
 
+        constexpr int REG_MAX_YOLOV8 = 16;
+        constexpr int REG_MAX_PPYOLOE = 17;
+
         static void generate_proposals_ppyoloeplus(
             int stride,
             const float* cls_feat,
@@ -2603,7 +2606,7 @@ namespace detection
             auto cls_ptr = cls_feat;
             auto boxes_ptr = box_feat;
             int reg_max = 17;
-            float dis_after_sm[reg_max];
+            float dis_after_sm[REG_MAX_PPYOLOE];
 
             for (int h = 0; h < feat_h; h++)
             {
@@ -2767,7 +2770,7 @@ namespace detection
             auto cls_ptr = cls_feat;
             auto boxes_ptr = box_feat;
             int reg_max = 16;
-            float dis_after_sm[reg_max];
+            float dis_after_sm[REG_MAX_YOLOV8];
 
             for (int h = 0; h < feat_h; h++)
             {
@@ -2949,8 +2952,8 @@ namespace detection
             float ratio_y = (float)src_cols / resize_cols;
 
             int count = picked.size();
-            double pi = M_PI;
-            double pi_2 = M_PI_2;
+            double pi = 3.14159265358979323846;
+            double pi_2 = 1.57079632679489661923;
             objects.resize(count);
             for (int i = 0; i < count; i++) {
                 objects[i] = proposals[picked[i]];

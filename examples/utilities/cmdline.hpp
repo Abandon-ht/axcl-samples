@@ -27,8 +27,9 @@
 
 #pragma once
 
+#if defined(__GNUC__) || defined(__clang__)
 #include <cxxabi.h>
-
+#endif
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -99,17 +100,21 @@ Target lexical_cast(const Source &arg) {
                         detail::is_same<Target, Source>::value>::cast(arg);
 }
 
-static inline std::string demangle(const std::string &name) {
-  int status = 0;
-  char *p = abi::__cxa_demangle(name.c_str(), 0, 0, &status);
-  std::string ret(p);
-  free(p);
-  return ret;
+static inline std::string demangle(const std::string& name) {
+#if defined(__GNUC__) || defined(__clang__)
+    int status = 0;
+    char* p = abi::__cxa_demangle(name.c_str(), 0, 0, &status);
+    std::string ret = p ? std::string(p) : name;
+    free(p);
+    return ret;
+#else
+    return name;
+#endif
 }
 
 template <class T>
 std::string readable_typename() {
-  return demangle(typeid(T).name());
+    return demangle(typeid(T).name());
 }
 
 template <class T>

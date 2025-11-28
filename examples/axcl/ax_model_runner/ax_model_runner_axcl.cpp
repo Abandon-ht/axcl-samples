@@ -54,7 +54,7 @@ static void print_io_info(std::vector<ax_runner_tensor_t> &input, std::vector<ax
 
 static bool read_file(const char *fn, std::vector<unsigned char> &data)
 {
-    FILE *fp = fopen(fn, "r");
+    FILE *fp = fopen(fn, "rb");
     if (fp != nullptr)
     {
         fseek(fp, 0L, SEEK_END);
